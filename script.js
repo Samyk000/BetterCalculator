@@ -5,27 +5,32 @@ class Calculator {
         this.setupEventListeners();
         this.loadTheme();
         this.loadHistory();
+        this.updateEmptyHistoryState();
+        this.setMobileHeight();
     }
 
     setupElements() {
         this.calculationPreview = document.querySelector('.calculation-preview');
-        this.liveResult = document.querySelector('.live-result');
-        this.previousOperandElement = document.querySelector('.previous-operand');
         this.currentOperandElement = document.querySelector('.current-operand');
         this.historyPanel = document.querySelector('.history-panel');
         this.historyList = document.querySelector('.history-list');
         this.historyToggle = document.querySelector('.history-toggle');
+        this.modal = document.getElementById('clearConfirmModal');
+        this.confirmClearBtn = this.modal.querySelector('.confirm-btn');
+        this.cancelClearBtn = this.modal.querySelector('.cancel-btn');
+        this.calculatorContainer = document.querySelector('.calculator-container');
     }
 
     setupVariables() {
         this.currentOperand = '0';
-        this.previousOperand = '';
-        this.operation = undefined;
+        this.hasDecimal = false;
+        this.lastWasOperator = false;
         this.history = [];
-        this.maxHistory = 15;
+        this.maxHistory = 50;
         this.themeIndex = 0;
         this.themes = ['default', 'dark'];
-        this.isCalculating = false;
+        this.expression = '';
+        this.lastResult = null;
     }
 
     setupEventListeners() {
@@ -34,14 +39,13 @@ class Calculator {
             button.addEventListener('click', () => {
                 this.appendNumber(button.innerText);
                 this.addButtonAnimation(button);
-                this.updateLiveCalculation();
             });
         });
 
         // Operator buttons
         document.querySelectorAll('.operator').forEach(button => {
             button.addEventListener('click', () => {
-                this.chooseOperation(button.innerText);
+                this.appendOperator(button.innerText);
                 this.addButtonAnimation(button);
             });
         });
@@ -70,128 +74,224 @@ class Calculator {
         });
 
         // History toggle
-        this.historyToggle.addEventListener('click', () => this.toggleHistory());
-
-        // History panel touch/drag handling
-        let startY, currentY;
-        this.historyPanel.addEventListener('touchstart', (e) => {
-            startY = e.touches[0].clientY;
+        this.historyToggle.addEventListener('click', () => {
+            this.toggleHistory();
         });
 
-        this.historyPanel.addEventListener('touchmove', (e) => {
-            currentY = e.touches[0].clientY;
-            const diff = currentY - startY;
-            if (diff > 0) { // Only allow dragging down
-                this.historyPanel.style.transform = `translateY(${diff}px)`;
-            }
+        // Clear history
+        document.querySelector('.clear-history').addEventListener('click', () => {
+            this.showClearHistoryModal();
         });
 
-        this.historyPanel.addEventListener('touchend', () => {
-            const diff = currentY - startY;
-            if (diff > 100) { // If dragged down more than 100px, close panel
-                this.closeHistory();
-            } else {
-                this.historyPanel.style.transform = '';
-            }
+        // Modal buttons
+        this.confirmClearBtn.addEventListener('click', () => {
+            this.clearHistory();
+            this.hideClearHistoryModal();
+        });
+
+        this.cancelClearBtn.addEventListener('click', () => {
+            this.hideClearHistoryModal();
         });
 
         // Keyboard support
         document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-    }
 
-    updateLiveCalculation() {
-        if (this.currentOperand === '0' || this.currentOperand === 'Error') return;
-        try {
-            const result = this.calculateExpression();
-            if (result !== undefined && result !== this.currentOperand) {
-                this.liveResult.textContent = `= ${this.formatNumber(result)}`;
-            } else {
-                this.liveResult.textContent = '';
+        // Close history panel when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.history-panel') && 
+                !e.target.closest('.history-toggle') && 
+                this.historyPanel.classList.contains('show')) {
+                this.closeHistory();
             }
-        } catch (error) {
-            this.liveResult.textContent = '';
-        }
-    }
+        });
 
-    calculateExpression() {
-        if (!this.previousOperand || !this.operation) return undefined;
-        const prev = parseFloat(this.previousOperand);
-        const current = parseFloat(this.currentOperand);
-        if (isNaN(prev) || isNaN(current)) return undefined;
-
-        switch (this.operation) {
-            case '+': return prev + current;
-            case '-': return prev - current;
-            case '×': return prev * current;
-            case '÷': return current !== 0 ? prev / current : undefined;
-            case '%': return (prev / 100) * current;
-            default: return undefined;
-        }
+        // Window resize event
+        window.addEventListener('resize', () => {
+            this.setMobileHeight();
+        });
     }
 
     appendNumber(number) {
-        if (this.currentOperand === 'Error') this.clear();
-        if (number === '.' && this.currentOperand.includes('.')) return;
+        if (number === '.' && this.hasDecimal) return;
+        if (number === '.') this.hasDecimal = true;
+
         if (this.currentOperand === '0' && number !== '.') {
             this.currentOperand = number;
         } else {
             this.currentOperand += number;
         }
+
+        if (!this.lastWasOperator) {
+            this.expression = this.currentOperand;
+        } else {
+            this.expression += number;
+        }
+
+        this.lastWasOperator = false;
         this.updateDisplay();
+        this.calculatePreview();
     }
 
-    chooseOperation(operation) {
-        if (this.currentOperand === 'Error') return;
-        if (this.currentOperand === '') return;
-        if (this.previousOperand !== '') {
-            this.compute();
+    appendOperator(operator) {
+        if (this.lastWasOperator) {
+            this.expression = this.expression.slice(0, -1) + operator;
+        } else {
+            this.expression += ` ${operator} `;
         }
-        this.operation = operation;
-        this.previousOperand = this.currentOperand;
-        this.currentOperand = '';
+
+        this.currentOperand = this.expression;
+        this.lastWasOperator = true;
+        this.hasDecimal = false;
         this.updateDisplay();
+        this.calculatePreview();
+    }
+
+    calculatePreview() {
+        try {
+            let calculation = this.expression.replace(/×/g, '*').replace(/÷/g, '/');
+            calculation = calculation.replace(/%/g, '/100*');
+            
+            // Handle trailing operator
+            if (this.lastWasOperator) {
+                calculation = calculation.slice(0, -2);
+            }
+
+            const result = eval(calculation);
+            
+            if (result !== undefined && !isNaN(result) && isFinite(result)) {
+                this.calculationPreview.textContent = `= ${this.formatNumber(result)}`;
+                this.lastResult = result;
+            } else {
+                this.calculationPreview.textContent = '';
+            }
+        } catch (error) {
+            this.calculationPreview.textContent = '';
+        }
     }
 
     compute() {
-        const result = this.calculateExpression();
-        if (result === undefined) {
-            this.currentOperand = 'Error';
-        } else {
-            const calculation = `${this.previousOperand} ${this.operation} ${this.currentOperand}`;
-            this.currentOperand = result.toString();
-            this.addToHistory(calculation, result);
+        if (!this.expression || this.lastWasOperator) return;
+
+        const calculation = this.expression;
+        try {
+            let result = this.lastResult;
+            
+            if (result !== null && !isNaN(result) && isFinite(result)) {
+                this.addToHistory(calculation, result);
+                this.currentOperand = this.formatNumber(result);
+                this.expression = this.currentOperand;
+                this.lastWasOperator = false;
+                this.hasDecimal = this.currentOperand.includes('.');
+                this.calculationPreview.textContent = '';
+                this.updateDisplay();
+            }
+        } catch (error) {
+            this.currentOperand = '0';
+            this.expression = '';
+            this.calculationPreview.textContent = '';
+            this.updateDisplay();
         }
-        this.operation = undefined;
-        this.previousOperand = '';
-        this.liveResult.textContent = '';
+    }
+
+    formatNumber(number) {
+        let formatted = number.toString();
+        if (formatted.includes('e')) {
+            return Number(formatted).toFixed(8);
+        }
+        
+        const [integerPart, decimalPart] = formatted.split('.');
+        const formattedInteger = parseInt(integerPart).toLocaleString('en-US');
+        
+        if (decimalPart) {
+            return `${formattedInteger}.${decimalPart}`;
+        }
+        return formattedInteger;
+    }
+
+    clear() {
+        this.currentOperand = '0';
+        this.expression = '';
+        this.lastWasOperator = false;
+        this.hasDecimal = false;
+        this.lastResult = null;
+        this.calculationPreview.textContent = '';
         this.updateDisplay();
     }
 
+    delete() {
+        if (this.currentOperand.length === 1) {
+            this.clear();
+            return;
+        }
+
+        // Remove last character
+        const lastChar = this.currentOperand.slice(-1);
+        if (lastChar === ' ') {
+            // Remove operator and spaces
+            this.currentOperand = this.currentOperand.slice(0, -3);
+            this.expression = this.expression.slice(0, -3);
+            this.lastWasOperator = false;
+        } else {
+            this.currentOperand = this.currentOperand.slice(0, -1);
+            this.expression = this.expression.slice(0, -1);
+            if (lastChar === '.') this.hasDecimal = false;
+        }
+
+        this.updateDisplay();
+        this.calculatePreview();
+    }
+
+    updateDisplay() {
+        this.currentOperandElement.textContent = this.currentOperand;
+    }
+
     addToHistory(calculation, result) {
-        this.history.unshift({ calculation, result });
+        this.history.unshift({
+            calculation,
+            result: this.formatNumber(result),
+            timestamp: new Date().toLocaleString()
+        });
+
         if (this.history.length > this.maxHistory) {
             this.history.pop();
         }
+
         this.updateHistoryDisplay();
         this.saveHistory();
+        this.updateEmptyHistoryState();
     }
 
     updateHistoryDisplay() {
         this.historyList.innerHTML = this.history
-            .map(item => `
-                <div class="history-item slide-up" data-result="${item.result}">
+            .map((item, index) => `
+                <div class="history-item" data-index="${index}">
                     <div class="calculation">${item.calculation}</div>
-                    <div class="result">= ${this.formatNumber(item.result)}</div>
+                    <div class="result">= ${item.result}</div>
+                    <div class="timestamp">${item.timestamp}</div>
                 </div>
             `)
             .join('');
+
+        document.querySelectorAll('.history-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const index = parseInt(item.dataset.index);
+                this.loadHistoryItem(index);
+            });
+        });
     }
 
-    formatNumber(number) {
-        const stringNumber = number.toString();
-        const [integerPart, decimalPart] = stringNumber.split('.');
-        let formattedInteger = parseInt(integerPart).toLocaleString();
-        return decimalPart ? `${formattedInteger}.${decimalPart}` : formattedInteger;
+    loadHistoryItem(index) {
+        const item = this.history[index];
+        if (item) {
+            this.currentOperand = item.result;
+            this.expression = item.result;
+            this.lastResult = parseFloat(item.result.replace(/,/g, ''));
+            this.lastWasOperator = false;
+            this.hasDecimal = item.result.includes('.');
+            this.updateDisplay();
+            this.calculationPreview.textContent = '';
+            this.closeHistory();
+        }
     }
 
     toggleHistory() {
@@ -200,6 +300,32 @@ class Calculator {
 
     closeHistory() {
         this.historyPanel.classList.remove('show');
+    }
+
+    showClearHistoryModal() {
+        this.modal.classList.add('show');
+    }
+
+    hideClearHistoryModal() {
+        this.modal.classList.remove('show');
+    }
+
+    clearHistory() {
+        this.history = [];
+        this.updateHistoryDisplay();
+        this.saveHistory();
+        this.updateEmptyHistoryState();
+    }
+
+    updateEmptyHistoryState() {
+        const emptyMessage = document.querySelector('.empty-history-message');
+        if (this.history.length === 0) {
+            emptyMessage.style.display = 'block';
+            this.historyList.style.display = 'none';
+        } else {
+            emptyMessage.style.display = 'none';
+            this.historyList.style.display = 'block';
+        }
     }
 
     toggleTheme() {
@@ -213,14 +339,14 @@ class Calculator {
         setTimeout(() => button.classList.remove('button-press'), 200);
     }
 
-        handleKeyboard(e) {
+    handleKeyboard(e) {
         if (e.key >= '0' && e.key <= '9' || e.key === '.') {
             this.appendNumber(e.key);
         } else if (['+', '-', '*', '/', '%'].includes(e.key)) {
-            let operation = e.key;
-            if (operation === '*') operation = '×';
-            if (operation === '/') operation = '÷';
-            this.chooseOperation(operation);
+            let operator = e.key;
+            if (operator === '*') operator = '×';
+            if (operator === '/') operator = '÷';
+            this.appendOperator(operator);
         } else if (e.key === 'Enter' || e.key === '=') {
             e.preventDefault();
             this.compute();
@@ -233,42 +359,9 @@ class Calculator {
         }
     }
 
-    clear() {
-        this.currentOperand = '0';
-        this.previousOperand = '';
-        this.operation = undefined;
-        this.liveResult.textContent = '';
-        this.updateDisplay();
-    }
-
-    delete() {
-        if (this.currentOperand === 'Error') return this.clear();
-        if (this.currentOperand.length === 1) {
-            this.currentOperand = '0';
-        } else {
-            this.currentOperand = this.currentOperand.slice(0, -1);
-        }
-        this.updateDisplay();
-        this.updateLiveCalculation();
-    }
-
-    updateDisplay() {
-        this.currentOperandElement.textContent = this.formatNumber(this.currentOperand);
-        if (this.operation) {
-            this.previousOperandElement.textContent = 
-                `${this.formatNumber(this.previousOperand)} ${this.operation}`;
-            this.calculationPreview.textContent = 
-                `${this.formatNumber(this.previousOperand)} ${this.operation}`;
-        } else {
-            this.previousOperandElement.textContent = '';
-            this.calculationPreview.textContent = '';
-        }
-
-        // Add animation for number changes
-        this.currentOperandElement.classList.add('slide-up');
-        setTimeout(() => {
-            this.currentOperandElement.classList.remove('slide-up');
-        }, 300);
+    setMobileHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
     }
 
     saveHistory() {
@@ -290,49 +383,14 @@ class Calculator {
             document.body.dataset.theme = savedTheme;
         }
     }
-
-    // Error handling
-    showError(message) {
-        this.currentOperand = 'Error';
-        this.updateDisplay();
-        this.currentOperandElement.classList.add('error');
-        setTimeout(() => {
-            this.currentOperandElement.classList.remove('error');
-        }, 300);
-    }
 }
 
 // Initialize calculator when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     const calculator = new Calculator();
 
-    // Handle clicks outside history panel
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.history-panel') && 
-            !e.target.closest('.history-toggle') && 
-            calculator.historyPanel.classList.contains('show')) {
-            calculator.closeHistory();
-        }
-    });
-
-    // Handle viewport height for mobile browsers
-    function setViewportHeight() {
-        document.documentElement.style.setProperty(
-            '--vh', 
-            `${window.innerHeight * 0.01}px`
-        );
-    }
-
-    setViewportHeight();
-    window.addEventListener('resize', setViewportHeight);
-
     // Prevent zoom on double tap (mobile)
     document.addEventListener('dblclick', (e) => {
         e.preventDefault();
     });
-
-    // Add touch feedback for mobile devices
-    if ('ontouchstart' in window) {
-        document.body.classList.add('touch-device');
-    }
 });
