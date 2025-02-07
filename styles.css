@@ -24,7 +24,7 @@
     --special-color: #e17055;
     --shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     --modal-bg: #ffffff;
-    --preview-color: #a4b0be;
+    --preview-color: #6c7a89;
     --border-color: #e1e4e8;
     --hover-bg: #f5f7fa;
     --vh: 1vh;
@@ -132,42 +132,30 @@ body {
 
 .calculation-preview {
     color: var(--preview-color);
-    font-size: 1.2rem;
-    min-height: 24px;
-    text-align: right;
-    opacity: 0.8;
-}
-
-.live-result {
-    color: var(--preview-color);
     font-size: 1.4rem;
     min-height: 30px;
-    text-align: right;
+    text-align: left;
+    opacity: 0.8;
+    margin-bottom: 10px;
     font-weight: 500;
+    transition: all 0.3s ease;
 }
 
 .main-display {
-    text-align: right;
-    margin-top: 10px;
-}
-
-.previous-operand {
-    color: var(--preview-color);
-    font-size: 1.3rem;
-    min-height: 24px;
-    direction: ltr;
-    text-align: right;
+    text-align: left;
+    margin-top: 5px;
 }
 
 .current-operand {
     color: var(--button-color);
-    font-size: 3rem;
+    font-size: 2.8rem;
     font-weight: 600;
     line-height: 1.2;
-    direction: ltr;
-    text-align: right;
+    text-align: left;
     word-wrap: break-word;
     word-break: break-all;
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
 }
 
 /* Buttons Grid */
@@ -188,7 +176,7 @@ button {
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: var(--shadow);
-    min-height: 60px;
+    min-height: 45px;
     touch-action: manipulation;
     position: relative;
     overflow: hidden;
@@ -318,18 +306,20 @@ button:active {
 .history-item .calculation {
     font-size: 1.1rem;
     margin-bottom: 5px;
+    color: var(--preview-color);
 }
 
 .history-item .result {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 600;
-    color: var(--operator-color);
+    color: var(--button-color);
 }
 
 .history-item .timestamp {
     font-size: 0.8rem;
     color: var(--preview-color);
     margin-top: 5px;
+    opacity: 0.8;
 }
 
 /* Modal Styles */
@@ -408,7 +398,11 @@ button:active {
     }
 
     .current-operand {
-        font-size: 2.5rem;
+        font-size: 2.2rem;
+    }
+
+    .calculation-preview {
+        font-size: 1.2rem;
     }
 
     .buttons {
@@ -417,7 +411,7 @@ button:active {
 
     button {
         font-size: 1.5rem;
-        min-height: 50px;
+        min-height: 45px;
     }
 
     .history-toggle {
@@ -428,11 +422,6 @@ button:active {
 
     .history-panel {
         height: 70vh;
-    }
-
-    .modal-content {
-        width: 95%;
-        padding: 20px;
     }
 }
 
@@ -447,7 +436,7 @@ button:active {
     }
 
     .current-operand {
-        font-size: 2.2rem;
+        font-size: 2rem;
     }
 }
 
@@ -462,20 +451,6 @@ button:active {
     }
 }
 
-/* Scrollbar Styling */
-.history-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.history-list::-webkit-scrollbar-track {
-    background: var(--calculator-bg);
-}
-
-.history-list::-webkit-scrollbar-thumb {
-    background: var(--operator-bg);
-    border-radius: 3px;
-}
-
 /* Animations */
 @keyframes slideUp {
     from { transform: translateY(10px); opacity: 0; }
@@ -486,25 +461,13 @@ button:active {
     animation: slideUp 0.3s ease forwards;
 }
 
-/* Error Animation */
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
+/* Button Press Animation */
+.button-press {
+    animation: buttonPress 0.2s ease;
 }
 
-.error {
-    animation: shake 0.3s ease-in-out;
-    color: var(--special-color) !important;
-}
-
-/* Success Animation */
-@keyframes pulse {
+@keyframes buttonPress {
     0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
+    50% { transform: scale(0.95); }
     100% { transform: scale(1); }
-}
-
-.success {
-    animation: pulse 0.3s ease-in-out;
 }
